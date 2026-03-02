@@ -279,34 +279,19 @@ Buatkan video realistic karakter [KARAKTER] sedang review [NAMA & DESKRIPSI HASI
 
 Tanpa teks, tanpa musik, tanpa watermark, Tone visual real-video realistis seperti konten TikTok, bukan animasi, Variasi sudut kamera wide → medium → close-up, Videonya berkualitas ultra HD 4K keren. Video tertata rapi dari opening, review rasa, penjelasan harga dan varian, sampai closing tanpa terpotong.
 
-ADEGAN 1 — WAJIB: karakter [KARAKTER] muncul on-screen, medium shot, 
-berbicara langsung ke kamera. TIDAK BOLEH diganti visual lain.
-Dialog: "[tulis kalimat dialog 1 di sini]"
+[Deskripsi visual adegan 1 — spesifik dan sinematik karakter on-screen, medium shot, berbicara langsung ke kamera], Dialog: "[kalimat dialog 1]"
 
-ADEGAN 2 — WAJIB: karakter [KARAKTER] muncul on-screen, close-up wajah 
-atau tangan memegang produk, masih berbicara.
-Dialog: "[tulis kalimat dialog 2 di sini]"
+[Deskripsi visual adegan 2 — visual murni, close-up produk/makanan/fasilitas, NO karakter], Dialog: "[kalimat dialog 2, voice over]"
 
-ADEGAN 3 — LARANGAN KERAS: ZERO karakter. Kamera hanya menampilkan 
-close-up produk/makanan/fasilitas. Tidak ada manusia, tidak ada tangan, 
-tidak ada bayangan orang.
-Narasi VO: "[tulis kalimat dialog 3 sebagai voice over]"
+[Deskripsi visual adegan 3 — visual murni close-up produk/fasilitas unggulan hasil riset], Dialog: "[kalimat dialog 3, voice over]"
 
-ADEGAN 4 — LARANGAN KERAS: ZERO karakter. Kamera hanya menampilkan 
-wide shot atau medium shot suasana tempat tanpa orang.
-Narasi VO: "[tulis kalimat dialog 4 sebagai voice over]"
+[Deskripsi visual adegan 4 — karakter on-screen, close-up wajah atau gesture produk], Dialog: "[kalimat dialog 4]"
 
-ADEGAN 5 — LARANGAN KERAS: ZERO karakter. Kamera hanya menampilkan 
-detail shot produk/spot unggulan hasil riset. Tidak ada manusia sama sekali.
-Narasi VO: "[tulis kalimat dialog 5 sebagai voice over]"
+[Deskripsi visual adegan 5 — visual murni, angle berbeda dari adegan sebelumnya, NO karakter], Dialog: "[kalimat dialog 5, voice over]"
 
-ADEGAN 6 — LARANGAN KERAS: ZERO karakter. Kamera hanya menampilkan 
-angle baru produk/tempat yang belum ditampilkan. Tulis HANYA jika durasi 15 detik.
-Narasi VO: "[tulis kalimat dialog 6 sebagai voice over]"
+[Deskripsi visual adegan 6 — visual murni, angle berbeda dari adegan sebelumnya, NO karakter], Dialog: "[kalimat dialog 6, voice over — hanya jika durasi 15 detik]"
 
-ADEGAN 7 — LARANGAN KERAS: ZERO karakter. Kamera hanya menampilkan 
-closing shot produk/tempat paling menarik. Tulis HANYA jika durasi 15 detik.
-Narasi VO: "[tulis kalimat dialog 7 sebagai voice over]"
+[Deskripsi visual adegan 7 — visual murni, closing shot produk/tempat, NO karakter], Dialog: "[kalimat dialog 7, voice over — hanya jika durasi 15 detik]"
 
 --
 **CEK WAJIB SEBELUM MENULIS SETIAP ADEGAN:**
