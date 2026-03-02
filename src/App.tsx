@@ -122,7 +122,17 @@ export default function App() {
   const handleGenerate = async () => {
     setIsLoading(true);
     setPrompts([]);
+// Hitung estimasi kata per segmen
+const estimateMaxWords = (duration: number): number => {
+  return Math.round(duration * 2.5); // 2.5 kata/detik max
+};
 
+const segmentDurationNum = parseInt(segmentDuration);
+const maxWordsPerSegment = estimateMaxWords(segmentDurationNum);
+
+// Tampilkan info ke user sebelum generate
+console.log(`Target: ${maxWordsPerSegment} kata per segmen ${segmentDurationNum} detik`);
+    
     const bebasModeInstruction = `Kamu adalah AI pembuat Sora Video Prompt Mamas dalam Bahasa Indonesia yang dibekali kemampuan pencarian Google. Tugas utamamu adalah MENCARI INFORMASI tentang input user, lalu membuat prompt video yang SANGAT SPESIFIK, deskriptif, dan sinematik berdasarkan format dan aturan baru di bawah ini.
 
 **PROSES BERPIKIR (WAJIB DIIKUTI):**
@@ -242,15 +252,30 @@ video tanpa musik tanpa teks'
 
 2. **HITUNG JUMLAH SEGMEN:** Bagi Total Durasi dengan Durasi per Segmen untuk menentukan berapa segmen yang harus dibuat. Contoh: Total 45 detik ÷ 15 detik per segmen = 3 segmen.
 
-3. **SUSUN DIALOG LENGKAP:** Tulis semua dialog dari Segmen 1 hingga segmen terakhir secara berurutan. Total kata dialog harus proporsional dengan durasi (sekitar 2–2,5 kata per detik). Dialog harus mengalir natural, sambung-menyambung antar segmen, dan TIDAK menyebut harga spesifik.
+3. **HITUNG KATA DIALOG PER SEGMEN (PENTING):**
+   - Setiap segmen 10 detik = MAXIMUM 25 kata total
+   - Setiap segmen 15 detik = MAXIMUM 37 kata total
+   - Standar: 2–2.5 kata per detik
+   - CONTOH 15 detik:
+     Jika dialog: "Serius, harga lewat lokasi bawah jauh lebih hemat. 
+     Lihat roti ini, teksturnya lembut banget dengan isian melimpah. 
+     Cocok buat bekal atau camilan sore." 
+     → Total 29 kata = VALID ✓
+   - Jika lebih dari 37 kata → hapus kalimat pendukung, pangkas menjadi esensial
+   
+4. **SUSUN DIALOG LENGKAP:** Tulis semua dialog dari Segmen 1 hingga segmen terakhir secara berurutan. Total kata dialog harus proporsional dengan durasi (sekitar 2–2,5 kata per detik). Dialog harus mengalir natural, sambung-menyambung antar segmen, dan TIDAK menyebut harga spesifik.
 
-4. **BUAT VISUAL PER ADEGAN:** Untuk setiap baris dialog, deskripsikan micro-scene visual yang mendukung narasi. Visual harus spesifik, dinamis, dan berdasarkan hasil riset (tampilkan keunggulan, menu, fasilitas, atau suasana nyata yang ditemukan saat riset).
+6. **BUAT VISUAL PER ADEGAN:** Untuk setiap baris dialog, deskripsikan micro-scene visual yang mendukung narasi. Visual harus spesifik, dinamis, dan berdasarkan hasil riset (tampilkan keunggulan, menu, fasilitas, atau suasana nyata yang ditemukan saat riset).
 
-5. **FINALISASI FORMAT:** Susun semua segmen ke dalam format output yang telah ditentukan di bawah.
+6. **FINALISASI FORMAT:** Susun semua segmen ke dalam format output yang telah ditentukan di bawah.
 
 ---
 
 **ATURAN DIALOG (WAJIB):**
+- **DURASI 10 DETIK = MAX 25 KATA**: Irama cepat, padat, penting-penting saja
+- **DURASI 15 DETIK = MAX 37 KATA**: Irama normal, bisa ada penjelasan ringkas
+- Standar: 2–2.5 kata per detik (natural voice-over)
+- Hitung total kata setiap segmen SEBELUM ditulis ulang jika melebihi limit
 - **SEGMEN 1 — HOOK LOKASI:** Dialog pertama di Segmen 1 WAJIB berisi ajakan untuk klik tag lokasi di bawah karena harganya lebih murah dibanding beli/datang langsung. Pilih atau kreasikan dari Bank Hook sesuai kategori.
 - **SEGMEN 2 DST — HOOK LANJUTAN:** Gunakan frasa jembatan yang menyambung dari segmen sebelumnya agar tidak terasa terpotong.
 - **SEGMEN TERAKHIR — CTA PENUTUP:** Dialog terakhir WAJIB ditutup dengan ajakan klik tag lokasi di bawah untuk cek harga dan lokasi terdekat. Kalimatnya bebas dikreasikan, tidak harus sama antar konten.
