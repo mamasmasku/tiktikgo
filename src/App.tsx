@@ -518,6 +518,8 @@ Deskripsi visual adegan 6 — jika durasi 15 detik, Dialog: "kalimat dialog 6"
 
 Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 
+---
+
 **ATURAN FORMAT:**
 - WAJIB awali tiap segmen dengan '▶ SEGMEN [N] ([X] detik)'.
 - WAJIB pisahkan segmen dengan '--', pisahkan konten dengan '*****'.
