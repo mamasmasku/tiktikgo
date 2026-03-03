@@ -417,7 +417,7 @@ video tanpa musik tanpa teks'
 - Setelah memilih, boleh MEMODIFIKASI KREATIF hook tersebut: ubah susunan kata, tambahkan ekspresi natural (contoh: "Eh wait—", "Guys,", "Oke jujur nih,"), atau gabungkan elemen dari dua hook berbeda.
 - Inti pesan TIDAK BOLEH berubah (harga lebih murah lewat lokasi bawah).
 - Jika menghasilkan lebih dari 1 konten, WAJIB gunakan hook yang BERBEDA di setiap konten. Tidak boleh ada hook yang mirip antar konten.
----
+===
 **BANK HOOK SEGMEN 1 (Pilih salah satu untuk segmen pertama sesuaikan dengan kategori):**
 ===========================
  MAKANAN / RESTO
@@ -461,24 +461,24 @@ video tanpa musik tanpa teks'
 -"Harganya lebih ringan kalau lewat lokasi bawah. Beli langsung di tempat? Pasti lebih tinggi."
 -"Klik lokasi bawah untuk dapat harga yang lebih rendah. Loket itu versi yang lebih mahal."
 
----
+===
 **BANK HOOK LANJUTAN - KATEGORI MAKANAN/MINUMAN (Pilih untuk segmen 2+ jika kategori makanan):**
 - "Setelah tadi nyobain bagian pertamanya, sekarang aku mau tunjukin bagian yang bikin menu ini makin menarik."
 - "Oke lanjut ya, tadi aku belum sempet bahas isiannya yang melimpah banget."
 - "Tadi baru nyobain satu varian, sekarang aku mau cobain yang lainnya biar lengkap."
 
----
+===
 **BANK HOOK LANJUTAN - KATEGORI HOTEL (Pilih untuk segmen 2+ jika kategori hotel):**
 - "Setelah tadi lihat kamarnya, sekarang aku mau tunjukin fasilitas lainnya."
 - "Oke lanjut ya, aku mau bahas bagian hotel yang paling aku suka."
 - "Tadi baru review kamar, sekarang kita lihat area umum dan fasilitasnya."
 
----
+===
 **BANK HOOK LANJUTAN - KATEGORI TEMPAT WISATA (Pilih untuk segmen 2+ jika kategori wisata):**
 - "Setelah tadi lihat spot utamanya, sekarang aku mau tunjukin area lainnya."
 - "Oke lanjut ya, soalnya tempat ini luas dan banyak spot menarik."
 - "Tadi baru lihat bagian depan, sekarang kita keliling lebih jauh."
----`;
+===`;
 
     const rapiModeInstruction = `Kamu adalah AI Scriptwriter dan Visual Director untuk konten review TikTok dalam Bahasa Indonesia, DIBEKALI KEMAMPUAN PENCARIAN GOOGLE. Cari info dulu, lalu buat skrip video yang natural dan siap produksi.
 
@@ -489,15 +489,15 @@ video tanpa musik tanpa teks'
 4. BUAT VISUAL: micro-scene spesifik berdasarkan riset.
 5. FINALISASI ke format output.
 
----
+===
 
 ${dialogRule}
 
----
+===
 
 ${characterRule}
 
----
+===
 
 **FORMAT OUTPUT — IKUTI 100%:**
 
@@ -518,7 +518,7 @@ Deskripsi visual adegan 6 — jika durasi 15 detik, Dialog: "kalimat dialog 6"
 
 Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 
----
+===
 
 **ATURAN FORMAT:**
 - WAJIB awali tiap segmen dengan '▶ SEGMEN [N] ([X] detik)'.
@@ -535,7 +535,7 @@ Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 - Segmen 2+: BANK HOOK LANJUTAN. Hook berbeda di setiap konten.
 - Segmen terakhir: CTA klik lokasi bawah lebih terjangkau di banding datang langsung di dialog berisi terakhir.
 
----
+===
 
 **BANK HOOK SEGMEN 1 — MAKANAN/RESTO:**
 - "Serius, kalau kamu klik lokasi di bawah, harganya beda. Lebih hemat dibanding beli langsung di tempat. Jangan skip."
@@ -616,6 +616,7 @@ ${stylePerContent}
 
       const responseText = (response.text || '')
         .replace(/\*\*\*\*\*/g, '---')
+        .replace(/^---$/gm, '---')            // normalize
         .replace(/^\[([^\]]+)\],/gm, '$1,')
         .replace(/^\[([^\]]+)\]$/gm, '$1');
 
