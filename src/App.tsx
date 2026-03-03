@@ -378,7 +378,7 @@ export default function App() {
 4.  **KONSTRUKSI PROMPT:** Susun semua elemen (deskripsi, hook, detail visual, persona model, manfaat, dan CTA) menjadi sebuah prompt video yang utuh sesuai format di bawah.
 
 **FORMAT PROMPT BARU (WAJIB DIIKUTI 100%):**
-'Buatkan video realistic karakter [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET YANG DETAIL].
+'Buatkan video realistic [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET YANG DETAIL].
 
 Hook "[PILIH HOOK DARI BANK HOOK BOLEH DI KREASIKAN]".
 
@@ -411,7 +411,7 @@ video tanpa musik tanpa teks'
 -   Pisahkan segmen dengan '--'.
 -   Pisahkan beberapa konsep video dengan '*****'.
 -   JANGAN gunakan format list atau poin, seluruh output harus dalam format paragraf naratif yang menyatu sesuai template.
-
+- DILARANG menuliskan kata "Karakter" sebelum nama/handle karakter. Langsung tulis nama/handle-nya. Contoh BENAR: "@batop40 tersenyum ramah ke kamera" — Contoh SALAH: "Karakter @batop40 tersenyum ramah ke kamera"
 **ATURAN PEMILIHAN HOOK (WAJIB):**
 - PILIH SECARA ACAK salah satu hook dari bank yang sesuai kategori — JANGAN selalu ambil yang pertama.
 - Setelah memilih, boleh MEMODIFIKASI KREATIF hook tersebut: ubah susunan kata, tambahkan ekspresi natural (contoh: "Eh wait—", "Guys,", "Oke jujur nih,"), atau gabungkan elemen dari dua hook berbeda.
@@ -502,7 +502,7 @@ ${characterRule}
 **FORMAT OUTPUT — IKUTI 100%:**
 
 ▶ SEGMEN [N] ([X] detik)
-Buatkan video realistic karakter [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK, ANTI BLUR VIDEO. Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda. Tanpa teks, tanpa musik, tanpa watermark. Tone visual realistis seperti TikTok, bukan animasi. Variasi sudut wide → medium → close-up. Ultra HD 4K. Video tertata rapi dari opening hingga closing tanpa terpotong.
+Buatkan video realistic [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK, ANTI BLUR VIDEO. Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda. Tanpa teks, tanpa musik, tanpa watermark. Tone visual realistis seperti TikTok, bukan animasi. Variasi sudut wide → medium → close-up. Ultra HD 4K. Video tertata rapi dari opening hingga closing tanpa terpotong.
 
 Deskripsi visual adegan 1, Dialog: "kalimat dialog 1"
 
@@ -518,13 +518,13 @@ Deskripsi visual adegan 6 — jika durasi 15 detik, Dialog: "kalimat dialog 6"
 
 Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 
---
-
 **ATURAN FORMAT:**
 - WAJIB awali tiap segmen dengan '▶ SEGMEN [N] ([X] detik)'.
 - WAJIB pisahkan segmen dengan '--', pisahkan konten dengan '*****'.
 - DILARANG tanda kurung [ ] dalam deskripsi visual output.
 - DILARANG penjelasan/komentar apapun sebelum atau sesudah output. Langsung mulai dengan '▶ SEGMEN 1'.
+- DILARANG menuliskan kata "Karakter" sebelum nama/handle karakter. Langsung tulis nama/handle-nya. Contoh BENAR: "@batop40 tersenyum ramah ke kamera, Dialog: ..." — Contoh SALAH: "Karakter @batop40 tersenyum ramah ke kamera, Dialog: ..."
+
 
 **ATURAN HOOK:**
 - Segmen 1 tiap konten: pilih acak dari BANK HOOK SEGMEN 1, boleh dimodifikasi, inti pesan tidak berubah.
