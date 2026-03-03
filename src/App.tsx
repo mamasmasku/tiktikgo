@@ -657,7 +657,7 @@ ${prompt}`;
       <div className="max-w-7xl mx-auto">
         <header className="mb-12">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-500">MasterPrompt TikTok GO</h1>
-          <p className="text-lg text-purple-300 mt-2">AI pembuat prompt video sinematik untuk konten affiliate review.</p>
+          <p className="text-lg text-purple-300 mt-2">AI pembuat prompt video sinematik untuk konten TikTok GO.</p>
         </header>
 
         <main className="grid grid-cols-1 lg:grid-cols-2 gap-12">
