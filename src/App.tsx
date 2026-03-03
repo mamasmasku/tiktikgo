@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { motion } from 'motion/react';
 import Input from './components/Input';
 import Select from './components/Select';
@@ -19,15 +20,225 @@ const contentStyles = [
   { id: 'listicle', number: 6, title: 'Listicle', description: 'Informasi terstruktur & jelas, mudah dipahami.' },
 ];
 
+// ── Opsi kemunculan karakter on-screen
+const characterAppearanceOptions = [
+  {
+    id: 'adegan-1-2',
+    label: 'Adegan 1 & 2',
+    description: 'Karakter on-screen di 2 adegan pertama tiap segmen',
+  },
+  {
+    id: 'adegan-1-saja',
+    label: 'Adegan 1 saja',
+    description: 'Karakter on-screen hanya di adegan pembuka tiap segmen',
+  },
+  {
+    id: 'adegan-1-dan-penutup',
+    label: 'Adegan 1 & penutup segmen terakhir',
+    description: 'On-screen di adegan 1 tiap segmen + adegan terakhir segmen terakhir',
+  },
+  {
+    id: 'adegan-1-2-dan-penutup',
+    label: 'Adegan 1, 2 & penutup segmen terakhir',
+    description: 'On-screen di adegan 1 & 2 tiap segmen + adegan terakhir segmen terakhir',
+  },
+];
+
+// ── Opsi strategi dialog
+const dialogStrategyOptions = [
+  {
+    id: 'voice-over-penuh',
+    label: 'Voice Over Penuh',
+    description: 'Dialog berjalan di semua adegan sepanjang video. Karakter tidak perlu on-screen untuk bernarasi — suara VO tetap terdengar di atas visual produk.',
+  },
+  {
+    id: 'hanya-on-screen',
+    label: 'Dialog Hanya Saat On-Screen',
+    description: 'Dialog hanya ada saat karakter muncul di layar. Adegan tanpa karakter = visual diam tanpa narasi.',
+  },
+];
+
+// ── Hitung kata dari semua Dialog: "..." dalam 1 segmen (skip kosong)
+const countDialogWords = (segmentText: string): number => {
+  const dialogMatches = segmentText.match(/Dialog:\s*"([^"]+)"/g) || [];
+  const allDialog = dialogMatches
+    .map(d => d.replace(/Dialog:\s*"/, '').replace(/"$/, '').trim())
+    .filter(d => d.length > 0)
+    .join(' ');
+  return allDialog.trim().split(/\s+/).filter(Boolean).length;
+};
+
+// ── Validasi semua segmen
+const validateDialogLength = (promptText: string, segDuration: string): string[] => {
+  const maxWords = segDuration === '10' ? 25 : 37;
+  const segments = promptText
+    .split(/(?=▶ SEGMEN)/)
+    .filter(s => s.trim().startsWith('▶ SEGMEN'));
+  return segments
+    .map((seg, i) => {
+      const wordCount = countDialogWords(seg);
+      if (wordCount > maxWords) {
+        return `Segmen ${i + 1}: ${wordCount} kata (batas ${maxWords} kata untuk ${segDuration} detik)`;
+      }
+      return null;
+    })
+    .filter(Boolean) as string[];
+};
+
+// ── Hitung kata per segmen untuk badge
+const getSegmentWordCounts = (promptText: string, segDuration: string): { count: number; max: number }[] => {
+  const maxWords = segDuration === '10' ? 25 : 37;
+  const segments = promptText
+    .split(/(?=▶ SEGMEN)/)
+    .filter(s => s.trim().startsWith('▶ SEGMEN'));
+  return segments.map(seg => ({
+    count: countDialogWords(seg),
+    max: maxWords,
+  }));
+};
+
+// ── Tentukan adegan mana yang karakter on-screen
+const getOnScreenScenes = (appearanceId: string, totalScenes: number): string => {
+  switch (appearanceId) {
+    case 'adegan-1-saja':
+      return `adegan 1 (semua segmen)`;
+    case 'adegan-1-dan-penutup':
+      return `adegan 1 (semua segmen) dan adegan ${totalScenes} dari segmen terakhir`;
+    case 'adegan-1-2-dan-penutup':
+      return `adegan 1 & 2 (semua segmen) dan adegan ${totalScenes} dari segmen terakhir`;
+    default: // adegan-1-2
+      return `adegan 1 & 2 (semua segmen)`;
+  }
+};
+
+// ── Bangun aturan kemunculan karakter
+const buildCharacterRule = (appearanceId: string, totalScenes: number): string => {
+  const onScreen = getOnScreenScenes(appearanceId, totalScenes);
+
+  const sceneList = Array.from({ length: totalScenes }, (_, i) => i + 1);
+
+  const isOnScreen = (sceneNum: number, isLastSegment = false): boolean => {
+    switch (appearanceId) {
+      case 'adegan-1-saja': return sceneNum === 1;
+      case 'adegan-1-dan-penutup': return sceneNum === 1 || (sceneNum === totalScenes && isLastSegment);
+      case 'adegan-1-2-dan-penutup': return sceneNum <= 2 || (sceneNum === totalScenes && isLastSegment);
+      default: return sceneNum <= 2;
+    }
+  };
+
+  const offScreenScenes = sceneList.filter(n => !isOnScreen(n));
+  const offScreenText = offScreenScenes.length > 0
+    ? `adegan ${offScreenScenes.join(', ')} (dan semua adegan kecuali penutup segmen terakhir jika berlaku)`
+    : '';
+
+  return `**ATURAN KEMUNCULAN KARAKTER ON-SCREEN — KERAS, TIDAK BOLEH DILANGGAR:**
+
+Karakter HANYA BOLEH TERLIHAT DI LAYAR pada: ${onScreen}.
+
+Pada adegan lainnya (${offScreenText}):
+- Karakter TIDAK BOLEH terlihat on-screen dalam bentuk apapun
+- TIDAK bicara ke kamera, TIDAK memegang produk, TIDAK ada gestur, TIDAK ada bagian tubuhnya
+- Visual HARUS 100% fokus pada: produk close-up, suasana tempat, detail makanan/fasilitas, atau elemen dekoratif
+
+PERBEDAAN ON-SCREEN dan VOICE OVER:
+- On-screen = karakter terlihat di video (wajah/tubuh tampak)
+- Voice over = suara narasi yang terdengar di atas visual, TANPA karakter terlihat
+- Adegan tanpa karakter on-screen TETAP BISA memiliki dialog voice over — suaranya terdengar tapi orangnya tidak terlihat
+
+CEK WAJIB sebelum menulis setiap adegan: apakah ini termasuk adegan on-screen karakter?
+→ Jika YA: deskripsikan karakter secara visual (ekspresi, gestur, dll.)
+→ Jika TIDAK: deskripsikan HANYA visual produk/tempat. Karakter tidak boleh disebut secara visual.`;
+};
+
+// ── Bangun aturan dialog berdasarkan strategi
+const buildDialogRule = (
+  strategyId: string,
+  appearanceId: string,
+  segmentDuration: string,
+  maxWords: number,
+  totalScenes: number
+): string => {
+  const isOnScreen = (sceneNum: number, isLastSegment = false): boolean => {
+    switch (appearanceId) {
+      case 'adegan-1-saja': return sceneNum === 1;
+      case 'adegan-1-dan-penutup': return sceneNum === 1 || (sceneNum === totalScenes && isLastSegment);
+      case 'adegan-1-2-dan-penutup': return sceneNum <= 2 || (sceneNum === totalScenes && isLastSegment);
+      default: return sceneNum <= 2;
+    }
+  };
+
+  if (strategyId === 'voice-over-penuh') {
+    // Hitung adegan yang on-screen (punya karakter) dan yang VO saja
+    const onScreenScenes = Array.from({ length: totalScenes }, (_, i) => i + 1).filter(n => isOnScreen(n));
+    const voOnlyScenes = Array.from({ length: totalScenes }, (_, i) => i + 1).filter(n => !isOnScreen(n));
+
+    // Alokasi kata: bagi merata ke semua adegan
+    const wordsPerScene = Math.floor(maxWords / totalScenes);
+    const onScreenWords = Math.round(wordsPerScene * 1.3); // adegan on-screen sedikit lebih banyak
+    const voWords = Math.round(wordsPerScene * 0.8);      // adegan VO lebih singkat
+
+    return `**ATURAN DIALOG — VOICE OVER PENUH:**
+
+Konsep: dialog berjalan TERUS-MENERUS dari adegan 1 hingga adegan ${totalScenes} seperti narasi video. Karakter tidak harus terlihat untuk bernarasi — suara voice over tetap terdengar di atas visual produk/tempat.
+
+SEMUA adegan dari 1 hingga ${totalScenes} WAJIB memiliki dialog. TIDAK ada adegan tanpa dialog.
+
+POLA DIALOG per adegan dalam 1 segmen (${segmentDuration} detik, maks ${maxWords} kata total):
+${Array.from({ length: totalScenes }, (_, i) => {
+  const n = i + 1;
+  const onScr = isOnScreen(n);
+  const isHook = n === 1;
+  const isCTA = n === totalScenes;
+  const words = onScr ? onScreenWords : voWords;
+  const role = isHook ? 'hook / pembuka — sedikit lebih panjang' : isCTA ? 'jembatan ke segmen berikutnya atau CTA penutup' : onScr ? 'narasi keunggulan utama' : 'narasi detail visual — pendek, padat';
+  const type = onScr ? '🎭 on-screen' : '🎙️ voice over';
+  return `- Adegan ${n} (${type}): ~${words} kata — ${role}`;
+}).join('\n')}
+
+CARA MENULIS dialog adegan non-karakter (voice over):
+- Tulis narasi pendek yang MENDESKRIPSIKAN atau MEMPERKUAT visual yang sedang tampil
+- Contoh: saat close-up ayam geprek ditampilkan, VO berkata "dagingnya tebal banget, dibalut tepung krispy yang bikin nagih"
+- Suara terdengar natural seperti orang yang sedang melihat dan berkomentar, bukan membaca skrip
+- JANGAN tulis "seperti yang kamu lihat" atau "di sini kita bisa melihat" — langsung ke deskripsi sensorik
+
+CEK WAJIB sebelum finalisasi setiap segmen:
+- Hitung total kata semua dialog (termasuk VO) → harus ≤ ${maxWords} kata
+- Pastikan SEMUA adegan 1–${totalScenes} memiliki dialog yang tidak kosong
+- Jika melebihi batas → potong dialog VO di adegan non-karakter terlebih dahulu (bukan hook/CTA)`;
+  }
+
+  // hanya-on-screen
+  const onScreenSceneNums = Array.from({ length: totalScenes }, (_, i) => i + 1).filter(n => isOnScreen(n));
+  const offScreenSceneNums = Array.from({ length: totalScenes }, (_, i) => i + 1).filter(n => !isOnScreen(n));
+  const maxWordsOnScreen = Math.round(maxWords / onScreenSceneNums.length * 1.1);
+
+  return `**ATURAN DIALOG — HANYA SAAT KARAKTER ON-SCREEN:**
+
+Dialog HANYA ADA di adegan di mana karakter terlihat on-screen.
+Adegan tanpa karakter = Dialog: "" (tanda kutip kosong, wajib ditulis, TIDAK boleh dihilangkan).
+
+Adegan BERNARASI: adegan ${onScreenSceneNums.join(', ')} → WAJIB ada dialog
+Adegan TANPA NARASI: adegan ${offScreenSceneNums.join(', ')} → WAJIB Dialog: ""
+
+ALOKASI KATA untuk ${onScreenSceneNums.length} adegan bernarasi (total maks ${maxWords} kata):
+- Rata-rata sekitar ${maxWordsOnScreen} kata per adegan on-screen
+- Adegan 1 (hook): prioritas utama, jangan dipotong
+- Adegan terakhir segmen terakhir (CTA): prioritas utama, jangan dipotong
+- Adegan on-screen tengah: bisa dikurangi jika mendekati batas
+
+FORMAT Dialog kosong yang BENAR: Dialog: ""
+FORMAT SALAH: Dialog: "-" | Dialog: "(tidak ada)" | menghapus baris Dialog sama sekali
+
+CEK WAJIB: hitung kata semua dialog berisi (bukan Dialog: "") → harus ≤ ${maxWords} kata total per segmen.`;
+};
+
 export default function App() {
   const [prompts, setPrompts] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // ✅ FIX: activeStyles sekarang array (multi-select)
   const [activeStyles, setActiveStyles] = useState<string[]>(['ugc']);
-
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedSegmentKey, setCopiedSegmentKey] = useState<string | null>(null);
+  const [promptWarnings, setPromptWarnings] = useState<string[][]>([]);
 
   const [category, setCategory] = useState('Makanan/Minuman');
   const [nameDesc, setNameDesc] = useState('');
@@ -37,6 +248,10 @@ export default function App() {
   const [contentCount, setContentCount] = useState('1');
   const [promptMode, setPromptMode] = useState<'bebas' | 'rapi'>('bebas');
   const [loadingText, setLoadingText] = useState('Menganalisa & membuat prompt...');
+
+  // ── Pengaturan mode Rapi
+  const [characterAppearance, setCharacterAppearance] = useState('adegan-1-2');
+  const [dialogStrategy, setDialogStrategy] = useState('voice-over-penuh');
 
   const loadingMessages = [
     'Mencari ide-ide sinematik...',
@@ -59,22 +274,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  // ✅ FIX: Toggle style — minimal 1 harus selalu terpilih
-  const toggleStyle = (id: string) => {
-    setActiveStyles(prev =>
-      prev.includes(id)
-        ? prev.length === 1 ? prev : prev.filter(s => s !== id)
-        : [...prev, id]
-    );
-  };
-
-  // ✅ FIX: Distribusi gaya ke konten secara round-robin
-  const distributeStyles = (count: number, styles: string[]): string[] => {
-    const result: string[] = [];
-    for (let i = 0; i < count; i++) {
-      result.push(styles[i % styles.length]);
-    }
-    return result;
+  const toggleStyle = (styleId: string) => {
+    setActiveStyles(prev => {
+      if (prev.includes(styleId)) {
+        return prev.length > 1 ? prev.filter(s => s !== styleId) : prev;
+      }
+      return [...prev, styleId];
+    });
   };
 
   const downloadPrompts = () => {
@@ -94,6 +300,11 @@ export default function App() {
     const updatedPrompts = [...prompts];
     updatedPrompts[index] = newText;
     setPrompts(updatedPrompts);
+    if (promptMode === 'rapi') {
+      const updatedWarnings = [...promptWarnings];
+      updatedWarnings[index] = validateDialogLength(newText, segmentDuration);
+      setPromptWarnings(updatedWarnings);
+    }
   };
 
   const copyPrompt = (text: string, index: number) => {
@@ -119,20 +330,45 @@ export default function App() {
     return text.split(/(?=▶ SEGMEN)/).filter(s => s.trim().startsWith('▶ SEGMEN'));
   };
 
+  // ── Preview pola adegan
+  const getScenePreview = () => {
+    const totalScenes = segmentDuration === '10' ? 5 : 7;
+    const isOnScreen = (n: number): boolean => {
+      switch (characterAppearance) {
+        case 'adegan-1-saja': return n === 1;
+        case 'adegan-1-dan-penutup': return n === 1 || n === totalScenes;
+        case 'adegan-1-2-dan-penutup': return n <= 2 || n === totalScenes;
+        default: return n <= 2;
+      }
+    };
+    return Array.from({ length: totalScenes }, (_, i) => {
+      const n = i + 1;
+      const onScreen = isOnScreen(n);
+      const hasDialog = dialogStrategy === 'voice-over-penuh' ? true : onScreen;
+      return { n, onScreen, hasDialog };
+    });
+  };
+
   const handleGenerate = async () => {
     setIsLoading(true);
     setPrompts([]);
-// Hitung estimasi kata per segmen
-const estimateMaxWords = (duration: number): number => {
-  return Math.round(duration * 2.5); // 2.5 kata/detik max
-};
+    setPromptWarnings([]);
 
-const segmentDurationNum = parseInt(segmentDuration);
-const maxWordsPerSegment = estimateMaxWords(segmentDurationNum);
+    const getStyleTitle = (id: string) => contentStyles.find(s => s.id === id)?.title || id;
+    const count = parseInt(contentCount) || 1;
+    const styleDistribution = Array.from({ length: count }, (_, i) =>
+      activeStyles[i % activeStyles.length]
+    );
+    const stylePerContent = styleDistribution
+      .map((s, i) => `Konten ${i + 1}: ${getStyleTitle(s)}`)
+      .join('\n');
 
-// Tampilkan info ke user sebelum generate
-console.log(`Target: ${maxWordsPerSegment} kata per segmen ${segmentDurationNum} detik`);
-    
+    const maxWords = segmentDuration === '10' ? 25 : 37;
+    const totalScenes = segmentDuration === '10' ? 5 : 7;
+
+    const characterRule = buildCharacterRule(characterAppearance, totalScenes);
+    const dialogRule = buildDialogRule(dialogStrategy, characterAppearance, segmentDuration, maxWords, totalScenes);
+
     const bebasModeInstruction = `Kamu adalah AI pembuat Sora Video Prompt Mamas dalam Bahasa Indonesia yang dibekali kemampuan pencarian Google. Tugas utamamu adalah MENCARI INFORMASI tentang input user, lalu membuat prompt video yang SANGAT SPESIFIK, deskriptif, dan sinematik berdasarkan format dan aturan baru di bawah ini.
 
 **PROSES BERPIKIR (WAJIB DIIKUTI):**
@@ -244,148 +480,97 @@ video tanpa musik tanpa teks'
 - "Tadi baru lihat bagian depan, sekarang kita keliling lebih jauh."
 ---`;
 
-    const rapiModeInstruction = `Kamu adalah AI Scriptwriter dan Visual Director untuk konten review TikTok dalam Bahasa Indonesia, yang DIBEKALI KEMAMPUAN PENCARIAN GOOGLE. Tugas utamamu adalah MENCARI INFORMASI DULU tentang input user, lalu mengolahnya menjadi skrip video dialog yang lengkap, membuatkan visual adegan dari hasil pencarian apa yang perlu di informasikan seperti keunggulan, fasilitas, pelayanan, suasana yang menarik, natural, dan siap produksi.
+    const rapiModeInstruction = `Kamu adalah AI Scriptwriter dan Visual Director untuk konten review TikTok dalam Bahasa Indonesia, DIBEKALI KEMAMPUAN PENCARIAN GOOGLE. Cari info dulu, lalu buat skrip video yang natural dan siap produksi.
 
-**PROSES BERPIKIR WAJIB — IKUTI URUTAN INI:**
-
-1. **PENCARIAN & RISET:** Gunakan Google Search untuk mencari informasi mendalam tentang [NAMA & DESKRIPSI] yang diberikan user. Cari keunikan produk/tempat, menu unggulan, fasilitas, varian, suasana, target pasar, dan poin menarik lainnya. JANGAN langsung menulis skrip sebelum selesai riset.
-
-2. **HITUNG JUMLAH SEGMEN:** Bagi Total Durasi dengan Durasi per Segmen untuk menentukan berapa segmen yang harus dibuat. Contoh: Total 45 detik ÷ 15 detik per segmen = 3 segmen.
-
-3. **HITUNG KATA DIALOG PER SEGMEN (PENTING):**
-   - Setiap segmen 10 detik = MAXIMUM 25 kata total
-   - Setiap segmen 15 detik = MAXIMUM 37 kata total
-   - Standar: 2–2.5 kata per detik
-   - CONTOH 15 detik:
-     Jika dialog: "Serius, harga lewat lokasi bawah jauh lebih hemat. 
-     Lihat roti ini, teksturnya lembut banget dengan isian melimpah. 
-     Cocok buat bekal atau camilan sore." 
-     → Total 29 kata = VALID ✓
-   - Jika lebih dari 37 kata → hapus kalimat pendukung, pangkas menjadi esensial
-   
-4. **SUSUN DIALOG LENGKAP:** Tulis semua dialog dari Segmen 1 hingga segmen terakhir secara berurutan. Total kata dialog harus proporsional dengan durasi (sekitar 2–2,5 kata per detik). Dialog harus mengalir natural, sambung-menyambung antar segmen, dan TIDAK menyebut harga spesifik.
-
-6. **BUAT VISUAL PER ADEGAN:** Untuk setiap baris dialog, deskripsikan micro-scene visual yang mendukung narasi. Visual harus spesifik, dinamis, dan berdasarkan hasil riset (tampilkan keunggulan, menu, fasilitas, atau suasana nyata yang ditemukan saat riset).
-
-6. **FINALISASI FORMAT:** Susun semua segmen ke dalam format output yang telah ditentukan di bawah.
+**PROSES BERPIKIR WAJIB:**
+1. RISET: Google Search untuk info mendalam tentang [NAMA & DESKRIPSI]. Cari keunikan, menu, fasilitas, varian, suasana. JANGAN tulis skrip sebelum selesai riset.
+2. HITUNG SEGMEN: Total Durasi ÷ Durasi per Segmen. Contoh: 45 ÷ 15 = 3 segmen.
+3. IKUTI aturan dialog dan karakter di bawah dengan sangat ketat.
+4. BUAT VISUAL: micro-scene spesifik berdasarkan riset.
+5. FINALISASI ke format output.
 
 ---
 
-**ATURAN DIALOG (WAJIB):**
-- **DURASI 10 DETIK = MAX 25 KATA**: Irama cepat, padat, penting-penting saja
-- **DURASI 15 DETIK = MAX 37 KATA**: Irama normal, bisa ada penjelasan ringkas
-- Standar: 2–2.5 kata per detik (natural voice-over)
-- Hitung total kata setiap segmen SEBELUM ditulis ulang jika melebihi limit
-- **SEGMEN 1 — HOOK LOKASI:** Dialog pertama di Segmen 1 WAJIB berisi ajakan untuk klik tag lokasi di bawah karena harganya lebih murah dibanding beli/datang langsung. Pilih atau kreasikan dari Bank Hook sesuai kategori.
-- **SEGMEN 2 DST — HOOK LANJUTAN:** Gunakan frasa jembatan yang menyambung dari segmen sebelumnya agar tidak terasa terpotong.
-- **SEGMEN TERAKHIR — CTA PENUTUP:** Dialog terakhir WAJIB ditutup dengan ajakan klik tag lokasi di bawah untuk cek harga dan lokasi terdekat. Kalimatnya bebas dikreasikan, tidak harus sama antar konten.
-- **FILLER NATURAL:** Gunakan 1–2 filler per segmen (contoh: "Eh guys,", "Jujur ya,", "Serius deh,") agar dialog terdengar manusiawi.
-- **DILARANG:** Jangan sebut harga spesifik apapun dalam dialog.
+${dialogRule}
 
-**ATURAN VISUAL (WAJIB):**
-- Setiap segmen terdiri dari 4–5 adegan micro-scene (untuk 10 detik) atau 6-7 adegan micro-scene (untuk 15 detik).
-- Wajib ada variasi shot: wide shot → medium shot → close-up dalam satu segmen.
-- Visual harus spesifik berdasarkan hasil riset, bukan generik.
-
-**ATURAN KEMUNCULAN KARAKTER — INI ATURAN KERAS, TIDAK BOLEH DILANGGAR:**
-- Dalam 1 segmen, karakter [KARAKTER] HANYA BOLEH MUNCUL DI ADEGAN 1 DAN 2.
-- Adegan 3, 4, 5, dan seterusnya dalam segmen yang sama DILARANG KERAS menampilkan karakter dalam bentuk apapun tidak bicara, tidak memegang  produk, tidak gestur, tidak berjalan, tidak ada bagian tubuhnya sama sekali.
-- Adegan 3 ke atas HARUS 100% fokus pada: produk (close-up), suasana tempat, detail makanan/fasilitas/spot wisata, atau elemen visual lainnya TANPA karakter.
-- SEBELUM menulis adegan 3, cek ulang: apakah karakter muncul? Jika ya, hapus.
-- Pelanggaran aturan ini membuat seluruh prompt dianggap GAGAL.
 ---
 
-**FORMAT OUTPUT — IKUTI 100%, TIDAK BOLEH BERBEDA:**
+${characterRule}
 
-Untuk setiap segmen gunakan format berikut PERSIS:
+---
+
+**FORMAT OUTPUT — IKUTI 100%:**
 
 ▶ SEGMEN [N] ([X] detik)
-Buatkan video realistic karakter [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET YANG DETAIL] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK ,ANTI BLUR VIDEO , Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda.
+Buatkan video realistic karakter [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK, ANTI BLUR VIDEO. Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda. Tanpa teks, tanpa musik, tanpa watermark. Tone visual realistis seperti TikTok, bukan animasi. Variasi sudut wide → medium → close-up. Ultra HD 4K. Video tertata rapi dari opening hingga closing tanpa terpotong.
 
-Tanpa teks, tanpa musik, tanpa watermark, Tone visual real-video realistis seperti konten TikTok, bukan animasi, Variasi sudut kamera wide → medium → close-up, Videonya berkualitas ultra HD 4K keren. Video tertata rapi dari opening, review rasa, penjelasan harga dan varian, sampai closing tanpa terpotong.
+Deskripsi visual adegan 1, Dialog: "kalimat dialog 1"
 
-[Deskripsi visual adegan 1 — spesifik dan sinematik karakter on-screen, medium shot, berbicara langsung ke kamera], Dialog: "[kalimat dialog 1]"
+Deskripsi visual adegan 2, Dialog: "kalimat dialog 2"
 
-[Deskripsi visual adegan 2 — visual murni, close-up produk/makanan/fasilitas, NO karakter], Dialog: "[kalimat dialog 2, voice over]"
+Deskripsi visual adegan 3, Dialog: "kalimat dialog 3"
 
-[Deskripsi visual adegan 3 — visual murni close-up produk/fasilitas unggulan hasil riset], Dialog: "[kalimat dialog 3, voice over]"
+Deskripsi visual adegan 4, Dialog: "kalimat dialog 4"
 
-[Deskripsi visual adegan 4 — karakter on-screen, close-up wajah atau gesture produk], Dialog: "[kalimat dialog 4]"
+Deskripsi visual adegan 5, Dialog: "kalimat dialog 5"
 
-[Deskripsi visual adegan 5 — visual murni, angle berbeda dari adegan sebelumnya, NO karakter], Dialog: "[kalimat dialog 5, voice over]"
+Deskripsi visual adegan 6 — jika durasi 15 detik, Dialog: "kalimat dialog 6"
 
-[Deskripsi visual adegan 6 — visual murni, angle berbeda dari adegan sebelumnya, NO karakter], Dialog: "[kalimat dialog 6, voice over — hanya jika durasi 15 detik]"
-
-[Deskripsi visual adegan 7 — visual murni, closing shot produk/tempat, NO karakter], Dialog: "[kalimat dialog 7, voice over — hanya jika durasi 15 detik]"
+Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 
 --
-**CEK WAJIB SEBELUM MENULIS SETIAP ADEGAN:**
-Tanya diri sendiri: "Apakah ini adegan 1 atau 2?"
-- Jika YA → karakter boleh muncul on-screen
-- Jika TIDAK → karakter dilarang muncul dalam bentuk apapun
-Jika adegan 3–7 masih ada kata: karakter, [KARAKTER], dia, ia, 
-tangannya, wajahnya — HAPUS dan ganti dengan deskripsi produk/tempat.
 
-**ATURAN FORMAT TAMBAHAN (WAJIB):**
-- WAJIB awali setiap segmen dengan '▶ SEGMEN [N] ([X] detik)' — ini tidak boleh dihilangkan.
-- WAJIB pisahkan setiap segmen dengan '--' di baris baru.
-- WAJIB pisahkan beberapa konsep video dengan '*****'.
-- JANGAN gunakan format list bertitik atau bernomor di luar struktur adegan.
-- Seluruh deskripsi ditulis dalam paragraf naratif yang mengalir.
-- DILARANG KERAS menulis teks penjelasan, pendahuluan, konseptualisasi, judul video, atau komentar apapun sebelum maupun sesudah output prompt. Langsung mulai output dengan '▶ SEGMEN 1' atau '*****' tanpa kata pembuka apapun.
-- DILARANG KERAS menggunakan tanda kurung kotak [ ] dalam output. 
-  Tulis langsung deskripsi visualnya tanpa pembungkus apapun.
-  BENAR: "Medium shot karakter berjalan masuk ke kafe,"
-  SALAH: "[Medium shot karakter berjalan masuk ke kafe],"
+**ATURAN FORMAT:**
+- WAJIB awali tiap segmen dengan '▶ SEGMEN [N] ([X] detik)'.
+- WAJIB pisahkan segmen dengan '--', pisahkan konten dengan '*****'.
+- DILARANG tanda kurung [ ] dalam deskripsi visual output.
+- DILARANG penjelasan/komentar apapun sebelum atau sesudah output. Langsung mulai dengan '▶ SEGMEN 1'.
 
-**ATURAN PEMILIHAN HOOK (WAJIB):**
-- PILIH SECARA ACAK salah satu hook dari bank yang sesuai kategori — JANGAN selalu ambil yang pertama.
-- Setelah memilih, boleh MEMODIFIKASI KREATIF hook tersebut: ubah susunan kata, tambahkan ekspresi natural (contoh: "Eh wait—", "Guys,", "Oke jujur nih,"), atau gabungkan elemen dari dua hook berbeda.
-- Inti pesan TIDAK BOLEH berubah (harga lebih murah lewat lokasi bawah).
-- Jika menghasilkan lebih dari 1 konten, WAJIB gunakan hook yang BERBEDA di setiap konten. Tidak boleh ada hook yang mirip antar konten.
-- **SETIAP KONTEN BARU (setelah *****) adalah video TERPISAH dan INDEPENDEN.**
-- **Segmen pertama dari SETIAP konten WAJIB menggunakan hook dari BANK HOOK SEGMEN 1 — bukan hook lanjutan.**
-- **Hook lanjutan HANYA untuk segmen 2, 3, dst. dalam konten yang SAMA.**
+**ATURAN HOOK:**
+- Segmen 1 tiap konten: pilih acak dari BANK HOOK SEGMEN 1, boleh dimodifikasi, inti pesan tidak berubah.
+- Segmen 2+: BANK HOOK LANJUTAN. Hook berbeda di setiap konten.
+- Segmen terakhir: CTA klik lokasi bawah di dialog berisi terakhir.
+
 ---
 
 **BANK HOOK SEGMEN 1 — MAKANAN/RESTO:**
--"Serius, kalau kamu klik lokasi di bawah, harganya beda. Lebih hemat dibanding beli langsung di tempat. Jangan skip."
--"Yang datang langsung bayar lebih tinggi. Kalau mau lebih hemat, klik lokasi bawah aja. Sistemnya memang begitu."
--"Langsung klik lokasi bawah ya. Lewat sini harganya lebih bersahabat dibanding pesan langsung di kasir."
--"Biar nggak keluar biaya lebih besar, pesan lewat tag lokasi bawah. Yang beli langsung selalu kena harga lebih tinggi."
--"Jangan beli langsung—lebih tinggi. Klik lokasi bawah, kamu dapat harga yang lebih enak."
--"Beneran beda harganya. Klik lokasi bawah kalau kamu mau versi yang lebih hemat daripada beli di tempat."
--"Kalau kamu klik lokasi bawah, harganya turun. Kalau beli langsung, ya… beda. Pilih yang lebih hemat lah."
--"Aku selalu klik lokasi bawah, soalnya harganya *lebih rendah* daripada pesan langsung. Cobain sendiri."
--"Kalau mau hemat, klik lokasi bawah. Yang beli langsung selalu bayar lebih mahal."
--"Pesan lewat tag lokasi bawah itu harganya lebih bersahabat. Datang langsung? Nggak dapet harga itu."
+- "Serius, kalau kamu klik lokasi di bawah, harganya beda. Lebih hemat dibanding beli langsung di tempat. Jangan skip."
+- "Yang datang langsung bayar lebih tinggi. Kalau mau lebih hemat, klik lokasi bawah aja. Sistemnya memang begitu."
+- "Langsung klik lokasi bawah ya. Lewat sini harganya lebih bersahabat dibanding pesan langsung di kasir."
+- "Biar nggak keluar biaya lebih besar, pesan lewat tag lokasi bawah. Yang beli langsung selalu kena harga lebih tinggi."
+- "Jangan beli langsung—lebih tinggi. Klik lokasi bawah, kamu dapat harga yang lebih enak."
+- "Beneran beda harganya. Klik lokasi bawah kalau kamu mau versi yang lebih hemat daripada beli di tempat."
+- "Kalau kamu klik lokasi bawah, harganya turun. Kalau beli langsung, ya… beda. Pilih yang lebih hemat lah."
+- "Aku selalu klik lokasi bawah, soalnya harganya lebih rendah daripada pesan langsung. Cobain sendiri."
+- "Kalau mau hemat, klik lokasi bawah. Yang beli langsung selalu bayar lebih mahal."
+- "Pesan lewat tag lokasi bawah itu harganya lebih bersahabat. Datang langsung? Nggak dapet harga itu."
 
 **BANK HOOK SEGMEN 1 — HOTEL:**
--"Booking lewat lokasi bawah itu harganya lebih rendah daripada walk-in. Mau hemat? Klik lokasi bawah aja."
--"Yang check-in langsung biasanya bayar lebih. Klik lokasi bawah, kamu dapat harga yang lebih ramah."
--"Serius, klik lokasi bawah. Harga di sana jauh lebih hemat dibanding datang langsung ke counter."
--"Kalau kamu booking walk-in, harganya beda. Klik lokasi bawah biar dapat harga yang lebih enak."
--"Jangan langsung datang ya—harga walk-in lebih tinggi. Akses dari lokasi bawah jauh lebih hemat."
--"Hematnya kerasa banget kalau booking lewat lokasi bawah. Walk-in itu lebih mahal."
--"Klik lokasi bawah sebelum booking. Harganya lebih turun dibanding bayar langsung di resepsionis."
--"Aku nggak pernah walk-in karena harganya lebih tinggi. Lokasi bawah selalu lebih hemat."
--"Kalau kamu mau harga yang lebih ringan, booking lewat lokasi bawah. Jangan ambil langsung di tempat."
--"Klik lokasi bawah—di sana harganya lebih lembut. Walk-in itu jauh lebih berat di kantong."
+- "Booking lewat lokasi bawah itu harganya lebih rendah daripada walk-in. Mau hemat? Klik lokasi bawah aja."
+- "Yang check-in langsung biasanya bayar lebih. Klik lokasi bawah, kamu dapat harga yang lebih ramah."
+- "Serius, klik lokasi bawah. Harga di sana jauh lebih hemat dibanding datang langsung ke counter."
+- "Kalau kamu booking walk-in, harganya beda. Klik lokasi bawah biar dapat harga yang lebih enak."
+- "Jangan langsung datang ya—harga walk-in lebih tinggi. Akses dari lokasi bawah jauh lebih hemat."
+- "Hematnya kerasa banget kalau booking lewat lokasi bawah. Walk-in itu lebih mahal."
+- "Klik lokasi bawah sebelum booking. Harganya lebih turun dibanding bayar langsung di resepsionis."
+- "Aku nggak pernah walk-in karena harganya lebih tinggi. Lokasi bawah selalu lebih hemat."
+- "Kalau kamu mau harga yang lebih ringan, booking lewat lokasi bawah. Jangan ambil langsung di tempat."
+- "Klik lokasi bawah—di sana harganya lebih lembut. Walk-in itu jauh lebih berat di kantong."
 
 **BANK HOOK SEGMEN 1 — TEMPAT WISATA:**
--"Tiket lewat lokasi bawah itu lebih murah dibanding beli langsung di loket. Klik dulu sebelum datang."
--"Jangan beli on the spot. Loket harganya lebih tinggi. Klik lokasi bawah buat harga yang lebih hemat."
--"Harganya beda ya. Lokasi bawah kasih kamu harga lebih rendah dibanding beli langsung di pintu masuk."
--"Kalau mau hemat, ambil tiket lewat tag lokasi bawah. Yang beli langsung selalu bayar lebih."
--"Klik lokasi bawah. Tiket di sana lebih ramah harga dibanding beli di loket."
--"Tiket online lewat lokasi bawah lebih hemat daripada harga di tempat. Serius, beda banget."
--"Yang beli di loket itu bayar versi lebih mahal. Klik lokasi bawah buat harga yang lebih enak."
--"Ambil tiket lewat lokasi bawah—lebih hemat. Jangan beli langsung kalau nggak mau keluar lebih."
--"Harganya lebih ringan kalau lewat lokasi bawah. Beli langsung di tempat? Pasti lebih tinggi."
--"Klik lokasi bawah untuk dapat harga yang lebih rendah. Loket itu versi yang lebih mahal."
+- "Tiket lewat lokasi bawah itu lebih murah dibanding beli langsung di loket. Klik dulu sebelum datang."
+- "Jangan beli on the spot. Loket harganya lebih tinggi. Klik lokasi bawah buat harga yang lebih hemat."
+- "Harganya beda ya. Lokasi bawah kasih kamu harga lebih rendah dibanding beli langsung di pintu masuk."
+- "Kalau mau hemat, ambil tiket lewat tag lokasi bawah. Yang beli langsung selalu bayar lebih."
+- "Klik lokasi bawah. Tiket di sana lebih ramah harga dibanding beli di loket."
+- "Tiket online lewat lokasi bawah lebih hemat daripada harga di tempat. Serius, beda banget."
+- "Yang beli di loket itu bayar versi lebih mahal. Klik lokasi bawah buat harga yang lebih enak."
+- "Ambil tiket lewat lokasi bawah—lebih hemat. Jangan beli langsung kalau nggak mau keluar lebih."
+- "Harganya lebih ringan kalau lewat lokasi bawah. Beli langsung di tempat? Pasti lebih tinggi."
+- "Klik lokasi bawah untuk dapat harga yang lebih rendah. Loket itu versi yang lebih mahal."
 
 **BANK HOOK LANJUTAN — MAKANAN:**
-- "Setelah tadi nyobain bagian pertamanya, sekarang aku mau tunjukin bagian yang bikin menu ini makin menarik."
+- "Setelah tadi nyobain bagian pertamanya, sekarang aku mau tunjukin yang bikin menu ini makin menarik."
 - "Oke lanjut ya, tadi aku belum sempet bahas isiannya yang melimpah banget."
 
 **BANK HOOK LANJUTAN — HOTEL:**
@@ -399,18 +584,6 @@ tangannya, wajahnya — HAPUS dan ganti dengan deskripsi produk/tempat.
 
     const systemInstruction = promptMode === 'bebas' ? bebasModeInstruction : rapiModeInstruction;
 
-    // ✅ FIX: Hitung distribusi gaya ke setiap konten
-    const count = parseInt(contentCount) || 1;
-    const assignedStyles = distributeStyles(count, activeStyles);
-
-    const styleDistribution = assignedStyles
-      .map((s, i) => {
-        const title = contentStyles.find(cs => cs.id === s)?.title || s;
-        return `Konten ${i + 1}: ${title}`;
-      })
-      .join('\n');
-
-    // ✅ FIX: userPrompt sekarang pakai styleDistribution, bukan satu activeStyle
     const userPrompt = `
 Buatkan ${contentCount} konten video yang berbeda berdasarkan detail berikut:
 
@@ -420,43 +593,37 @@ Karakter: ${character || 'faceless'}
 Durasi per Segmen: ${segmentDuration} detik
 Total Durasi: ${totalDuration} detik
 
-Distribusi Gaya Konten (WAJIB diikuti persis, setiap konten menggunakan gaya yang ditentukan):
-${styleDistribution}
+Gaya Konten per video (WAJIB DIIKUTI):
+${stylePerContent}
 `;
 
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userPrompt, systemInstruction }),
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      // @ts-ignore
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.8,
+          tools: [{ googleSearch: {} }]
+        }
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Gagal menghubungi server');
-      }
-
-      const data = await response.json();
-      const rawText: string = data.text;
-
-      // ✅ FIX: Parsing robust — split dari ***** original, bukan replace dulu
-      const responseText = rawText
+      const responseText = (response.text || '')
+        .replace(/\*\*\*\*\*/g, '---')
         .replace(/^\[([^\]]+)\],/gm, '$1,')
         .replace(/^\[([^\]]+)\]$/gm, '$1');
 
       const generatedPrompts = responseText
-        .split(/\s*\*{5}\s*/)
-        .map((p: string) => p.trim())
-        .filter((p: string) => p.includes('▶ SEGMEN'));
+        .split('---')
+        .map(p => p.trim())
+        .filter(p => p.includes('▶ SEGMEN'));
 
-      const getStyleTitle = (id: string) =>
-        contentStyles.find((s) => s.id === id)?.title || id;
-
-      const formattedPrompts = generatedPrompts.map((prompt: string, i: number) => {
-        // ✅ FIX: Ambil style title dari assignedStyles[i], bukan activeStyle tunggal
-        const styleTitle = getStyleTitle(assignedStyles[i] || activeStyles[0]);
+      const formattedPrompts = generatedPrompts.map((prompt, i) => {
+        const styleId = styleDistribution[i] ?? activeStyles[0];
+        const styleTitle = getStyleTitle(styleId);
         const totalSegments = (prompt.match(/▶ SEGMEN/g) || []).length;
-
         return `═══════════════════════════════════════
 KONTEN #${i + 1} — ${styleTitle.toUpperCase()}
 ═══════════════════════════════════════
@@ -467,33 +634,131 @@ ${prompt}`;
       });
 
       setPrompts(formattedPrompts);
-    } catch (error: any) {
-      console.error('Error generating prompts:', error);
-      setPrompts([`Maaf, terjadi kesalahan: ${error.message}`]);
+
+      if (promptMode === 'rapi') {
+        const warnings = formattedPrompts.map(p => validateDialogLength(p, segmentDuration));
+        setPromptWarnings(warnings);
+      }
+
+    } catch (error) {
+      console.error("Error generating prompts:", error);
+      setPrompts(['Maaf, terjadi kesalahan saat membuat prompt. Silakan coba lagi.']);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const scenePreview = getScenePreview();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-zinc-200 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="mb-12">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-500">MasterPrompt TikTok GO</h1>
-          <p className="text-lg text-purple-300 mt-2">AI pembuat prompt video sinematik untuk konten TikTok GO.</p>
+          <p className="text-lg text-purple-300 mt-2">AI pembuat prompt video sinematik untuk konten affiliate review.</p>
         </header>
 
         <main className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Input Section */}
           <div className="flex flex-col gap-8">
+
+            {/* Mode Prompt */}
             <div className="flex flex-col gap-4 p-6 bg-gray-800/50 border border-purple-700 rounded-xl">
               <h2 className="text-2xl font-semibold text-yellow-400 border-b border-purple-700 pb-3">⚙️ Mode Prompt</h2>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setPromptMode('bebas')} className={`py-3 px-4 rounded-lg font-semibold transition-all ${promptMode === 'bebas' ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700/50 text-white hover:bg-gray-700'}`}>Bebas</button>
                 <button onClick={() => setPromptMode('rapi')} className={`py-3 px-4 rounded-lg font-semibold transition-all ${promptMode === 'rapi' ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700/50 text-white hover:bg-gray-700'}`}>Rapi</button>
               </div>
+
+              {promptMode === 'rapi' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex flex-col gap-6 mt-2 pt-4 border-t border-purple-800"
+                >
+                  {/* Kemunculan Karakter */}
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-semibold text-purple-300">🎭 Karakter On-Screen</p>
+                    <p className="text-xs text-zinc-500 -mt-1">Adegan mana saja karakter terlihat di layar</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {characterAppearanceOptions.map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setCharacterAppearance(opt.id)}
+                          className={`flex items-start gap-3 text-left px-4 py-3 rounded-lg border transition-all ${
+                            characterAppearance === opt.id
+                              ? 'bg-purple-700/50 border-purple-400 text-white'
+                              : 'bg-gray-900/40 border-gray-700 text-zinc-400 hover:border-purple-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          <span className={`mt-0.5 w-3.5 h-3.5 flex-shrink-0 rounded-full border-2 transition-all ${characterAppearance === opt.id ? 'border-yellow-400 bg-yellow-400' : 'border-gray-500'}`} />
+                          <span className="flex flex-col gap-0.5">
+                            <span className="text-sm font-semibold leading-tight">{opt.label}</span>
+                            <span className="text-xs text-zinc-500 leading-snug">{opt.description}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Strategi Dialog */}
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-semibold text-purple-300">🗣️ Strategi Dialog</p>
+                    <p className="text-xs text-zinc-500 -mt-1">Apakah narasi terus berjalan atau hanya saat karakter on-screen</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {dialogStrategyOptions.map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setDialogStrategy(opt.id)}
+                          className={`flex items-start gap-3 text-left px-4 py-3 rounded-lg border transition-all ${
+                            dialogStrategy === opt.id
+                              ? 'bg-purple-700/50 border-purple-400 text-white'
+                              : 'bg-gray-900/40 border-gray-700 text-zinc-400 hover:border-purple-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          <span className={`mt-0.5 w-3.5 h-3.5 flex-shrink-0 rounded-full border-2 transition-all ${dialogStrategy === opt.id ? 'border-yellow-400 bg-yellow-400' : 'border-gray-500'}`} />
+                          <span className="flex flex-col gap-0.5">
+                            <span className="text-sm font-semibold leading-tight">{opt.label}</span>
+                            <span className="text-xs text-zinc-500 leading-snug">{opt.description}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preview pola adegan */}
+                  <div className="bg-gray-900/60 border border-purple-800/60 rounded-lg px-4 py-3">
+                    <p className="text-xs font-semibold text-purple-300 mb-2">
+                      📋 Pola per segmen ({segmentDuration} detik = {segmentDuration === '10' ? 5 : 7} adegan):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {scenePreview.map(({ n, onScreen, hasDialog }) => (
+                        <div
+                          key={n}
+                          className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border text-xs font-medium ${
+                            onScreen
+                              ? 'bg-purple-800/50 border-purple-500 text-purple-200'
+                              : 'bg-gray-800/60 border-gray-600 text-zinc-400'
+                          }`}
+                        >
+                          <span className="font-bold">A{n}</span>
+                          <span>{onScreen ? '🎭' : '🎬'}</span>
+                          <span className="text-zinc-500">{hasDialog ? '🗣️' : '🔇'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-2 text-xs text-zinc-600">
+                      <span>🎭 karakter on-screen</span>
+                      <span>🎬 visual produk</span>
+                      <span>🗣️ ada dialog</span>
+                      <span>🔇 tanpa dialog</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
 
+            {/* Input User */}
             <div className="flex flex-col gap-6 p-6 bg-gray-800/50 border border-purple-700 rounded-xl">
               <h2 className="text-2xl font-semibold text-yellow-400 border-b border-purple-700 pb-3">📥 Input User</h2>
               <Select label="Kategori" id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -513,26 +778,33 @@ ${prompt}`;
               </div>
             </div>
 
+            {/* Gaya Konten */}
             <div className="flex flex-col gap-4 p-6 bg-gray-800/50 border border-purple-700 rounded-xl">
-              {/* ✅ FIX: Label menunjukkan multi-select + info distribusi */}
               <div className="flex items-center justify-between border-b border-purple-700 pb-3">
                 <h2 className="text-2xl font-semibold text-yellow-400">🎨 Gaya Konten</h2>
-                <span className="text-xs text-purple-300 bg-purple-900/50 px-2 py-1 rounded-md">
-                  {activeStyles.length} dipilih · bisa lebih dari 1
+                <span className="text-xs text-purple-300 bg-purple-900/50 px-2 py-1 rounded-full">
+                  {activeStyles.length} terpilih · bisa pilih lebih dari 1
                 </span>
               </div>
-
-              {/* ✅ FIX: Preview distribusi gaya jika lebih dari 1 dipilih */}
-              {activeStyles.length > 1 && parseInt(contentCount) > 1 && (
-                <div className="text-xs text-zinc-400 bg-gray-900/50 border border-purple-800 rounded-lg p-3">
-                  <p className="text-purple-300 font-semibold mb-1">Distribusi ke {contentCount} konten:</p>
-                  {distributeStyles(parseInt(contentCount) || 1, activeStyles).map((s, i) => {
-                    const title = contentStyles.find(cs => cs.id === s)?.title || s;
-                    return <p key={i}>Konten {i + 1}: {title}</p>;
-                  })}
+              {activeStyles.length > 1 && (
+                <div className="bg-gray-900/60 border border-purple-800 rounded-lg px-4 py-3">
+                  <p className="text-xs text-purple-300 mb-2 font-semibold">📊 Distribusi ke {contentCount} konten:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from({ length: Math.min(parseInt(contentCount) || 1, 10) }, (_, i) => {
+                      const styleId = activeStyles[i % activeStyles.length];
+                      const style = contentStyles.find(s => s.id === styleId);
+                      return (
+                        <span key={i} className="text-xs bg-purple-800/60 text-purple-200 px-2 py-0.5 rounded-full">
+                          #{i + 1} {style?.title.split(' ')[0]}
+                        </span>
+                      );
+                    })}
+                    {(parseInt(contentCount) || 1) > 10 && (
+                      <span className="text-xs text-purple-400 italic px-1">+{(parseInt(contentCount) || 1) - 10} lagi...</span>
+                    )}
+                  </div>
                 </div>
               )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {contentStyles.map((style) => (
                   <StyleButton
@@ -540,7 +812,6 @@ ${prompt}`;
                     number={style.number}
                     title={style.title}
                     description={style.description}
-                    // ✅ FIX: isActive dari array activeStyles
                     isActive={activeStyles.includes(style.id)}
                     onClick={() => toggleStyle(style.id)}
                   />
@@ -562,10 +833,7 @@ ${prompt}`;
             <div className="flex justify-between items-center border-b border-purple-700 pb-3">
               <h2 className="text-2xl font-semibold text-yellow-400">🚀 Hasil Prompt</h2>
               {prompts.length > 0 && (
-                <button
-                  onClick={downloadPrompts}
-                  className="flex items-center gap-2 text-sm bg-purple-700 text-zinc-300 px-3 py-1.5 rounded-md hover:bg-purple-600 transition-colors"
-                >
+                <button onClick={downloadPrompts} className="flex items-center gap-2 text-sm bg-purple-700 text-zinc-300 px-3 py-1.5 rounded-md hover:bg-purple-600 transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   Download All
                 </button>
@@ -580,7 +848,7 @@ ${prompt}`;
                     <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                     <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                   </div>
-                  <p className="text-zinc-400 text-center transition-opacity duration-500">{loadingText}</p>
+                  <p className="text-zinc-400 text-center">{loadingText}</p>
                 </div>
               )}
               {!isLoading && prompts.length === 0 && (
@@ -591,6 +859,8 @@ ${prompt}`;
 
               {prompts.map((prompt, index) => {
                 const segments = extractSegments(prompt);
+                const wordCounts = promptMode === 'rapi' ? getSegmentWordCounts(prompt, segmentDuration) : [];
+                const hasWarning = (promptWarnings[index]?.length ?? 0) > 0;
 
                 return (
                   <div key={index} className="flex flex-col gap-3">
@@ -609,25 +879,38 @@ ${prompt}`;
                       </button>
                     </div>
 
+                    {promptMode === 'rapi' && wordCounts.length > 0 && (
+                      <div className="flex flex-wrap gap-2 px-1">
+                        {wordCounts.map((wc, wi) => {
+                          const isOver = wc.count > wc.max;
+                          return (
+                            <span key={wi} className={`text-xs px-2.5 py-1 rounded-full font-medium border ${isOver ? 'bg-red-900/40 border-red-600 text-red-300' : 'bg-green-900/30 border-green-700/60 text-green-300'}`}>
+                              {isOver ? '⚠️' : '✓'} Seg {wi + 1}: {wc.count}/{wc.max} kata
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {promptMode === 'rapi' && hasWarning && (
+                      <div className="bg-yellow-900/30 border border-yellow-600/60 rounded-lg px-4 py-3">
+                        <p className="text-xs font-semibold text-yellow-400 mb-1.5">⚠️ Dialog melebihi batas — kemungkinan terpotong di Sora:</p>
+                        {promptWarnings[index].map((w, wi) => (
+                          <p key={wi} className="text-xs text-yellow-300 ml-2">· {w}</p>
+                        ))}
+                        <p className="text-xs text-yellow-500/70 italic mt-2">Edit di kolom teks atau generate ulang.</p>
+                      </div>
+                    )}
+
                     {segments.length > 0 && (
                       <div className="flex flex-wrap gap-2 px-1">
                         {segments.map((_, segIdx) => {
                           const key = `${index}-${segIdx}`;
                           const isCopied = copiedSegmentKey === key;
                           return (
-                            <button
-                              key={segIdx}
-                              onClick={() => copySegment(prompt, index, segIdx)}
-                              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-500
-                                ${isCopied
-                                  ? 'bg-yellow-500 text-gray-900 border-yellow-500'
-                                  : 'bg-gray-800 text-zinc-300 border-gray-600 hover:bg-gray-700 hover:border-purple-500 hover:text-white'
-                                }`}
-                            >
-                              {isCopied
-                                ? <><span>✓</span><span>Segmen {segIdx + 1} Tersalin!</span></>
-                                : <><span>📋</span><span>Salin Segmen {segIdx + 1}</span></>
-                              }
+                            <button key={segIdx} onClick={() => copySegment(prompt, index, segIdx)}
+                              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 ${isCopied ? 'bg-yellow-500 text-gray-900 border-yellow-500' : 'bg-gray-800 text-zinc-300 border-gray-600 hover:bg-gray-700 hover:border-purple-500 hover:text-white'}`}>
+                              {isCopied ? <><span>✓</span><span>Segmen {segIdx + 1} Tersalin!</span></> : <><span>📋</span><span>Salin Segmen {segIdx + 1}</span></>}
                             </button>
                           );
                         })}
