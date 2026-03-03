@@ -393,7 +393,7 @@ Buat tampilan video yang hidup, menarik, real dan realistis seperti konten TikTo
 video tanpa musik tanpa teks'
 
 **ATURAN HOOK (SANGAT PENTING):**
--   **UNTUK SEGMEN 1:** Hook HARUS dipilih atau dikreasikan dari "BANK HOOK SEGMEN 1". Pesan utamanya adalah tentang mendapatkan harga lebih terjangkau melalui tag lokasi.
+-   **UNTUK SEGMEN 1:** Hook HARUS dipilih atau dikreasikan dari "BANK HOOK SEGMEN 1". Pesan utamanya adalah tentang mendapatkan harga lebih terjangkau melalui tag lokasi di banding datang langsung.
 -   **UNTUK SEGMEN 2 DST:** Hook HARUS dipilih atau dikreasikan dari "BANK HOOK LANJUTAN" yang sesuai dengan kategori.
 -   **SETIAP KONTEN BARU (setelah *****) adalah video TERPISAH dan INDEPENDEN.**
 -   **Segmen pertama dari SETIAP konten (termasuk konten ke-2, ke-3, dst.) WAJIB menggunakan hook dari BANK HOOK SEGMEN 1 — bukan hook lanjutan.**
@@ -502,7 +502,7 @@ ${characterRule}
 **FORMAT OUTPUT — IKUTI 100%:**
 
 ▶ SEGMEN [N] ([X] detik)
-Buatkan video realistic [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK, ANTI BLUR VIDEO. Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda. Tanpa teks, tanpa musik, tanpa watermark. Tone visual realistis seperti TikTok, bukan animasi. Variasi sudut wide → medium → close-up. Ultra HD 4K. Video tertata rapi dari opening hingga closing tanpa terpotong.
+Buatkan video realistic [KARAKTER] sedang review [NAMA & DESKRIPSI HASIL RISET] dengan gaya [gaya konten], Durasi [DURASI SEGMEN] detik, MULTI SCENE, NO TEXT, CLEAR SUBJECT LOCK, ANTI BLUR VIDEO. Tiap adegan visual sekitar 2–3 detik, Dialog langsung muncul di opening scene, tanpa intro shot, tanpa jeda. Tanpa teks, tanpa musik, tanpa watermark. Tone visual realistis seperti TikTok, bukan animasi. Ultra HD 4K. Video tertata rapi dari opening hingga closing tanpa terpotong.
 
 Deskripsi visual adegan 1, Dialog: "kalimat dialog 1"
 
@@ -526,12 +526,14 @@ Deskripsi visual adegan 7 — jika durasi 15 detik, Dialog: "kalimat dialog 7"
 - DILARANG tanda kurung [ ] dalam deskripsi visual output.
 - DILARANG penjelasan/komentar apapun sebelum atau sesudah output. Langsung mulai dengan '▶ SEGMEN 1'.
 - DILARANG menuliskan kata "Karakter" sebelum nama/handle karakter. Langsung tulis nama/handle-nya. Contoh BENAR: "@batop40 tersenyum ramah ke kamera, Dialog: ..." — Contoh SALAH: "Karakter @batop40 tersenyum ramah ke kamera, Dialog: ..."
+- ATURAN DIALOG: Pesan inti yang WAJIB tersampaikan di setiap konten adalah: pesan lewat tag lokasi di bawah karena harga lebih murah dibanding datang langsung. Selipkan pesan ini secara natural di dialog, bukan hanya di CTA akhir. Boleh dikreasikan kalimatnya asal inti pesannya sama.
+- ATURAN VISUAL: Komposisi shot per segmen harus didominasi wide shot dan medium shot. Close-up produk MAKSIMAL 1 kali per segmen. Urutan yang disarankan: wide → medium → medium → close-up produk (1x) → medium → wide → medium. DILARANG close-up produk lebih dari 1 adegan dalam 1 segmen yang sama.
 
 
 **ATURAN HOOK:**
 - Segmen 1 tiap konten: pilih acak dari BANK HOOK SEGMEN 1, boleh dimodifikasi, inti pesan tidak berubah.
 - Segmen 2+: BANK HOOK LANJUTAN. Hook berbeda di setiap konten.
-- Segmen terakhir: CTA klik lokasi bawah di dialog berisi terakhir.
+- Segmen terakhir: CTA klik lokasi bawah lebih terjangkau di banding datang langsung di dialog berisi terakhir.
 
 ---
 
